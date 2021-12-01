@@ -42,7 +42,30 @@ fi
 timestamp=$(date '+%d%m%Y-%H%M%S')
 filename=$name"-httpd-logs-"$timestamp".tar"
 tar -cvf $filename --absolute-names /var/log/apache2/*.log
-mv $filename /tmp/
+#extracting file size
+fileSize=$(ls -lh $filename | cut -d " " -f5)
 
+mv $filename /tmp/
 # Step 6 - Copying logs to S3 bucket
 aws s3 cp /tmp/$filename s3://$s3_bucket/$filename
+
+#Check if inventory.html is presnt and create if not there otherwise append the data
+isInventory=$(ls /var/www/html/ | grep "inventory" | wc -l)
+data="httpd-logs\t\t$timestamp\t\ttar\t\t$fileSize\n"
+if [ $isInventory == 0 ]
+then
+	printf "Log Type\t\tDate Created\t\tType\t\tSize\n">/var/www/html/inventory.html
+	printf $data>>/var/www/html/inventory.html
+else
+	printf $data>>/var/www/html/inventory.html
+fi
+
+#check if we have a cron job or not other wise schedule it
+cronJob=$(ls /etc/cron.d/ | grep "automation" |wc -l)
+if [ $cronJob -ge 1 ]
+then
+	echo "Cron Job is present"
+else
+	echo "Adding Cron Job"
+	echo "0 0 * * * root /root/Automation_Project/automation.sh">/etc/cron.d/automation
+fi
